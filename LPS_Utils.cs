@@ -36,13 +36,13 @@ namespace LogansPathSystem
         {
             Vector3 v_currentPos_toEntity = entityTrans.position - currentPos;
             Vector3 v_crntPt_toPrev = prevPos - currentPos;
-            Vector3 v_crntPt_toEndPos = nxtPos - currentPos;
-            float dot_future = Vector3.Dot( 
-                v_currentPos_toEntity.normalized, v_crntPt_toEndPos.normalized );
-            float dot_prev = Vector3.Dot(
+            Vector3 v_crntPt_toNxtPos = nxtPos - currentPos;
+            float entityAlignment_withNxtPt = Vector3.Dot( 
+                v_currentPos_toEntity.normalized, v_crntPt_toNxtPos.normalized );
+            float entityAlignment_withPreviousPt = Vector3.Dot(
                 v_currentPos_toEntity.normalized, v_crntPt_toPrev.normalized);
 
-            if (dot_future > dot_prev)
+            if (entityAlignment_withNxtPt > entityAlignment_withPreviousPt)
             {
                 return true;
             }

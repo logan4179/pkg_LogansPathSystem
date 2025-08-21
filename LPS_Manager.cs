@@ -1,6 +1,7 @@
 using NUnit.Framework;
 using System.Collections.Generic;
 using System.Linq;
+using UnityEditor;
 using UnityEngine;
 
 
@@ -23,6 +24,7 @@ namespace LogansPathSystem
 
         [Header("DEBUG")]
         [SerializeField] private bool amDebugging = false;
+        [SerializeField] private bool debugOnlyWhenSelected = false;
         [SerializeField] private bool amDrawingPaths = true;
         [SerializeField, UnityEngine.Range(0f, 3f)] private float radius_pathPoints = 0.2f;
 
@@ -30,6 +32,16 @@ namespace LogansPathSystem
 
         void Start()
         {
+            if( _Paths == null || _Paths.Count == 0 )
+            {
+                Debug.LogWarning( "LogansPathSystem Warning! LPS_Manager had no paths assigned at Start(). Was this intentional?");
+            }
+
+            if (_Entities == null || _Entities.Count == 0)
+            {
+                Debug.LogWarning("LogansPathSystem Warning! LPS_Manager had no entities assigned at Start(). Was this intentional?");
+            }
+
             if (turnOnAllPathObjectsAtStart)
             {
                 for (int i_paths = 0; i_paths < _Paths.Count; i_paths++)
@@ -63,11 +75,10 @@ namespace LogansPathSystem
             Debug.Log($"Got '{_Paths.Count}' children transforms");
         }
 
-
 #if UNITY_EDITOR
         private void OnDrawGizmos()
         {
-            if (!amDebugging)
+            if (!amDebugging || (debugOnlyWhenSelected && Selection.activeGameObject != gameObject) )
             {
                 return;
             }

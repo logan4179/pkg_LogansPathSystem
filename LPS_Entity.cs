@@ -496,7 +496,7 @@ namespace LogansPathSystem
             #region DECIDE IF INCREMENT IS NEEDED -----------------------------------
             dbgClass += $"distToEndGoal: '{Vector3.Distance(transform.position, v_chaseGoalEnd)}' / {Threshold_CloseEnough}\n" +
                 $"";
-            if( 
+            if (
                 Vector3.Distance(transform.position, v_chaseGoalEnd) <= Threshold_CloseEnough ||
                 (
                     !AmOnStartOrEnd &&
@@ -505,6 +505,14 @@ namespace LogansPathSystem
                         transform,
                         PreviousPathPoint.Position, _CurrentPathPoint.Position, NextPathPoint.Position
                     )
+                ) ||
+                (
+                    AmOnLastPathPoint && 
+                    Vector3.Dot
+                    (
+                        Vector3.Normalize( transform.position - _CurrentPathPoint.Position),
+                        _CurrentPathPoint.V_ToPrev.normalized
+                    ) < 0
                 )
             )
             {
