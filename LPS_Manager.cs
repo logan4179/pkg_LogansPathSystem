@@ -14,7 +14,7 @@ namespace LogansPathSystem
     {
         [Header("REFERENCE (INTERNAL)")]
         public List<LPS_Path> _Paths;
-        //public List<LPS_Entity> _Entities;
+        public List<LPS_Entity> _Entities;
 
 
         //[Header("REFERENCE (EXTERNAL)")]
