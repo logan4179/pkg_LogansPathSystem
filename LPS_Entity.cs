@@ -53,6 +53,7 @@ namespace LogansPathSystem
         Vector3 v_chaseGoalEnd;
         Vector3 v_chaseGoal;
         Vector3 v_chaseGoalStart;
+        private float cd_pauseAlarm = 0f;
 
         #region PROPERTIES ==========================================
         public bool AmOnLastPathPoint
@@ -151,13 +152,20 @@ namespace LogansPathSystem
         {
             string dbgString = "IncrementPath()\n";
 
-            if (_CurrentPathPoint.Flag_WaitAt) //needs to be done before the increment
+            if (_CurrentPathPoint.Flag_WaitAt) //needs to be done before the increment because this will be the moment that it reaches this point, not when it starts moving towards it
             {
                 flag_amTraveling = false;
                 Event_OnPathPointWait.Invoke();
             }
+            else if( _CurrentPathPoint.PauseDuration > 0f )
+            {
+                flag_amTraveling = false;
+                cd_pauseAlarm = _CurrentPathPoint.PauseDuration;
+            }
 
             currentPathPointIndex++;
+            runningSegmentTravelTime = 0f;
+
             if (currentPathPointIndex >= _CurrentPath.PathPoints.Count)
             {
                 flag_amTraveling = false;
@@ -165,9 +173,6 @@ namespace LogansPathSystem
                 Event_OnPathCompleted.Invoke();
                 return;
             }
-
-            runningSegmentTravelTime = 0f;
-
 
             calculatedSegmentTravelTime = Vector3.Distance(PreviousPathPoint.Position, _CurrentPathPoint.Position) /
                 (_CurrentPathPoint.SpeedOverride > 0f ? _CurrentPathPoint.SpeedOverride : _MoveSpeed);
@@ -218,8 +223,10 @@ namespace LogansPathSystem
         {
             dbgClass = $"{nameof(flag_amTraveling)}: '{flag_amTraveling}'\n" +
                 $"{nameof(currentPathPointIndex)}: '{currentPathPointIndex}', {_CurrentPathPoint.Position}\n" +
+                $"{nameof(cd_pauseAlarm)}: '{cd_pauseAlarm}'\n" +
                 $"";
 
+            /* //I think I'd like a lot of this stuff to actually fail loudly instead, so I'm commenting out. DWS
             if
             (
                 !flag_amTraveling || _CurrentPath == null || CurrentPathPointIndex > _CurrentPath.PathPoints.Count ||
@@ -227,6 +234,29 @@ namespace LogansPathSystem
             )
             {
                 return;
+            }
+            */
+
+            if ( !flag_amTraveling )
+            {
+                if (cd_pauseAlarm > 0f)
+                {
+                    cd_pauseAlarm -= Time.deltaTime;
+
+                    if( cd_pauseAlarm <= 0f )
+                    {
+                        flag_amTraveling = true;
+                        cd_pauseAlarm = 0f;
+                    }
+                    else
+                    {
+                        return;
+                    }
+                }
+                else
+                {
+                    return;
+                }
             }
 
             #region VALUE CALCULATIONS ==================================================
@@ -274,8 +304,8 @@ namespace LogansPathSystem
             dbgClass += $"{nameof(runningSegmentTravelTime)}: '{runningSegmentTravelTime}' / {calculatedSegmentTravelTime}\n" +
                 $"{nameof(travelTimePercentage)}: '{travelTimePercentage}'\n" +
                 $"{nameof(v_entityToCrntPt)}: '{v_entityToCrntPt}'\n" +
-
                 $"";
+            
         }
 
         private void Update_FwdDriven_straight()

@@ -17,6 +17,8 @@ namespace LogansPathSystem
             "reach the next paint in the specified time. Note: This only applies to " +
             "point driven movement.")]
         public float TimingOverride = -1f;
+        [Header("Optional amount of time to pause when an entity reaches this point before automatically continuing.")]
+        public float PauseDuration = 0f;
 
         [SerializeField] private bool disableMyMeshRendererOnStart = false;
 
