@@ -222,7 +222,7 @@ namespace LogansPathSystem
         private void Update()
         {
             dbgClass = $"{nameof(flag_amTraveling)}: '{flag_amTraveling}'\n" +
-                $"{nameof(currentPathPointIndex)}: '{currentPathPointIndex}'{(currentPathPointIndex > 0 ? $", pos: '{_CurrentPathPoint.Position}'" : "")}\n" +
+                $"{nameof(currentPathPointIndex)}: '{currentPathPointIndex}'\n" +
                 $"{nameof(cd_pauseAlarm)}: '{cd_pauseAlarm}'\n" +
 
                 $"";
