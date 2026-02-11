@@ -222,8 +222,9 @@ namespace LogansPathSystem
         private void Update()
         {
             dbgClass = $"{nameof(flag_amTraveling)}: '{flag_amTraveling}'\n" +
-                $"{nameof(currentPathPointIndex)}: '{currentPathPointIndex}', {_CurrentPathPoint.Position}\n" +
+                $"{nameof(currentPathPointIndex)}: '{currentPathPointIndex}'{(currentPathPointIndex > 0 ? $", pos: '{_CurrentPathPoint.Position}'" : "")}\n" +
                 $"{nameof(cd_pauseAlarm)}: '{cd_pauseAlarm}'\n" +
+
                 $"";
 
             /* //I think I'd like a lot of this stuff to actually fail loudly instead, so I'm commenting out. DWS
