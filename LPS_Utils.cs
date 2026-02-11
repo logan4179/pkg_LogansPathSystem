@@ -55,8 +55,8 @@ namespace LogansPathSystem
 
     /// <summary>
     /// Mode representing type of movement.
-    /// <param>ForwardDriven_simple: Entity moves directly (linearly) to the next point if the entity is facing the next point enough to be considered 'in threshold'</param>
-    /// <para>ForwardDriven_smoothed: Entity moves forward toward a Vector that continually smoothes so that it rounds corners.</para>
+    /// <para>ForwardDriven_straight: Entity moves directly (linearly) to the next point if the entity is facing the next point enough to be considered 'in threshold'</para>
+    /// <para>ForwardDriven_smooth: Entity moves forward toward a Vector that continually smoothes so that it rounds corners.</para>
     /// </summary>
     public enum LPS_MovementMode
     {

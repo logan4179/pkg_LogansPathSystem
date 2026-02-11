@@ -14,7 +14,7 @@ namespace LogansPathSystem
     {
         [Header("REFERENCE (INTERNAL)")]
         public List<LPS_Path> _Paths;
-        public List<LPS_Entity> _Entities;
+        //public List<LPS_Entity> _Entities;
 
 
         //[Header("REFERENCE (EXTERNAL)")]
@@ -30,16 +30,19 @@ namespace LogansPathSystem
 
         [SerializeField] private Vector3 v_labelOffset;
 
+        [ContextMenu("z call GrabPathsFromChildren()")]
+        public void GrabPathsFromChildren()
+        {
+            _Paths = GetComponentsInChildren<LPS_Path>().ToList();
+
+            Debug.Log($"Got '{_Paths.Count}' children transforms");
+        }
+
         void Start()
         {
             if( _Paths == null || _Paths.Count == 0 )
             {
                 Debug.LogWarning( "LogansPathSystem Warning! LPS_Manager had no paths assigned at Start(). Was this intentional?");
-            }
-
-            if (_Entities == null || _Entities.Count == 0)
-            {
-                Debug.LogWarning("LogansPathSystem Warning! LPS_Manager had no entities assigned at Start(). Was this intentional?");
             }
 
             if (turnOnAllPathObjectsAtStart)
@@ -57,53 +60,5 @@ namespace LogansPathSystem
         [UnityEngine.Range(0f,1f)] public float TryInt = 0;
         public float SinRslt;
 
-        void Update()
-        {
-            for (int i_entites = 0; i_entites < _Entities.Count; i_entites++)
-            {
-                _Entities[i_entites].UpdateMe();
-            }
-
-            SinRslt = Mathf.Sin(TryInt);
-        }
-
-        [ContextMenu("z call GrabPathsFromChildren()")]
-        public void GrabPathsFromChildren()
-        {
-            _Paths = GetComponentsInChildren<LPS_Path>().ToList();
-
-            Debug.Log($"Got '{_Paths.Count}' children transforms");
-        }
-
-#if UNITY_EDITOR
-        private void OnDrawGizmos()
-        {
-            if (!amDebugging || (debugOnlyWhenSelected && Selection.activeGameObject != gameObject) )
-            {
-                return;
-            }
-
-            if (amDrawingPaths && _Paths != null && _Paths.Count > 0)
-            {
-                for (int i_paths = 0; i_paths < _Paths.Count; i_paths++)
-                {
-                    if (_Paths[i_paths].gameObject.activeSelf)
-                    {
-                        _Paths[i_paths].DrawMyGizmos(radius_pathPoints, v_labelOffset);
-                    }
-                }
-
-                if (_Entities != null && _Entities.Count > 0)
-                {
-                    for (int i_entites = 0; i_entites < _Entities.Count; i_entites++)
-                    {
-                        _Entities[i_entites].DrawMyGizmos(v_labelOffset);
-                    }
-                }
-            }
-
-
-        }
-#endif
     }
 }

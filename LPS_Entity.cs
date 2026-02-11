@@ -1,3 +1,4 @@
+using System;
 using UnityEditor;
 using UnityEngine;
 using UnityEngine.Events;
@@ -19,7 +20,7 @@ namespace LogansPathSystem
         //[Header("OPTIONS")]
 
 
-        [Header("MOVING")]
+        [Header("MOVEMENT")]
         public float _MoveSpeed = 1f;
         [Tooltip("Distance at which this entity will be considered to have reached it's goal.")]
         public float Threshold_CloseEnough = 0.1f;
@@ -27,7 +28,7 @@ namespace LogansPathSystem
         public float SpeedEasingDistance = 0f;
 
 
-        [Header("TURNING")]
+        [Header("ROTATION")]
         public float TurnSpeed = 1f;
         [Tooltip("Threshold at which this entity is considered 'facing enough' to start " +
             "translating toward the next goal. The closer this value is towards 1, the more strict"),
@@ -36,17 +37,24 @@ namespace LogansPathSystem
 
         [Tooltip("If enabled, this causes the turning to get less sharp (turning slows) as the entity gets more in line with it's target facing direction")]
         public bool UseProgressiveTurnSpeed = false;
+        [Tooltip("If enabled, only allows the entity to rotate horizontally. Note: not implemented yet")]
+        public bool RestrictVerticalRotation = false; //note: need to implement
 
         [Header("OPTIONS")]
         [SerializeField] private bool snapToFirstPointAtStart = false;
 
 
-        [Header("OTHER")]
+        //[Header("OTHER")]
         private int currentPathPointIndex = 0;
         public int CurrentPathPointIndex => currentPathPointIndex;
         private bool flag_amTraveling = false;
+        float runningSegmentTravelTime; //keeps track of how long the entity has been travelling towards it's goal since the last point.
+        float calculatedSegmentTravelTime;
+        Vector3 v_chaseGoalEnd;
+        Vector3 v_chaseGoal;
+        Vector3 v_chaseGoalStart;
 
-        //[Header("TRUTH")]
+        #region PROPERTIES ==========================================
         public bool AmOnLastPathPoint
         {
             get
@@ -63,8 +71,13 @@ namespace LogansPathSystem
             }
         }
         public bool HavePathPointAfterCurrent => currentPathPointIndex < _CurrentPath.PathPoints.Count - 1;
-        public bool AmOnStartOrEnd => currentPathPointIndex == 0 || currentPathPointIndex >= _CurrentPath.PathPoints.Count - 1;
+        public bool HavePathPointBeforeCurrent => 
+            currentPathPointIndex > 0;
 
+        public bool AmOnStartOrEnd => currentPathPointIndex == 0 || currentPathPointIndex >= _CurrentPath.PathPoints.Count - 1;
+        public Vector3 V_toPrev => _CurrentPath.GetVectorToPreviousPt( currentPathPointIndex );
+        public Vector3 V_toNext => _CurrentPath.GetVectorToNextPt( currentPathPointIndex );
+        #endregion
 
         [Header("EVENTS")]
         public UnityEvent Event_OnPathStarted;
@@ -75,7 +88,6 @@ namespace LogansPathSystem
         [SerializeField] private bool amDebugging;
         [SerializeField, TextArea(1, 10)] private string dbgClass;
         [SerializeField] private float dbgFwdLength = 1f;
-
 
         private void Start()
         {
@@ -91,6 +103,7 @@ namespace LogansPathSystem
             if (snapToFirstPointAtStart)
             {
                 transform.position = _CurrentPathPoint.Position;
+                runningSegmentTravelTime = 0f;
             }
 
             flag_amTraveling = true;
@@ -113,7 +126,11 @@ namespace LogansPathSystem
             
         }
 
-        public void BeginTravelingDownNewPath(LPS_Path path)
+        /// <summary>
+        /// Sets a new path for this entity, and immediately begins travelling down this new path.
+        /// </summary>
+        /// <param name="path"></param>
+        public void BeginTravelingDownNewPath( LPS_Path path )
         {
             _CurrentPath = path;
 
@@ -129,43 +146,11 @@ namespace LogansPathSystem
             flag_amTraveling = true;
         }
 
-        public void UpdateMe()
-        {
-            dbgClass = $"{nameof(flag_amTraveling)}: '{flag_amTraveling}'\n" +
-                $"{nameof(currentPathPointIndex)}: '{currentPathPointIndex}'\n" +
-                $"";
-
-            if
-            (
-                !flag_amTraveling ||
-                _CurrentPath == null ||
-                CurrentPathPointIndex > _CurrentPath.PathPoints.Count ||
-                currentPathPointIndex < 0
-            )
-            {
-                return; //short-circuit
-            }
-
-            if (_movementMode == LPS_MovementMode.ForwardDriven_straight )
-            {
-                Update_FwdDriven_straight();
-            }
-            else if (_movementMode == LPS_MovementMode.ForwardDriven_smooth )
-            {
-                Update_FwdDriven_smoothed();
-            }
-            else if (_movementMode == LPS_MovementMode.PointDriven_straight )
-            {
-                Update_PtDriven_straight();
-            }
-            else if (_movementMode == LPS_MovementMode.PointDriven_smooth )
-            {
-                Update_PtDriven_smoothed();
-            }
-        }
-
+        System.DateTime dt_segmentTravel;
         private void IncrementPath()
         {
+            string dbgString = "IncrementPath()\n";
+
             if (_CurrentPathPoint.Flag_WaitAt) //needs to be done before the increment
             {
                 flag_amTraveling = false;
@@ -173,45 +158,124 @@ namespace LogansPathSystem
             }
 
             currentPathPointIndex++;
-
-            //Debug.Log($"{nameof(currentPathPointIndex)} incremented, and now: '{currentPathPointIndex}' out of '{_CurrentPath.PathPoints.Count}' pts...");
-
             if (currentPathPointIndex >= _CurrentPath.PathPoints.Count)
             {
                 flag_amTraveling = false;
-                Debug.Log($"reached end of path.");
+                //Debug.Log($"reached end of path.");
                 Event_OnPathCompleted.Invoke();
+                return;
             }
-            else
+
+            runningSegmentTravelTime = 0f;
+
+
+            calculatedSegmentTravelTime = Vector3.Distance(PreviousPathPoint.Position, _CurrentPathPoint.Position) /
+                (_CurrentPathPoint.SpeedOverride > 0f ? _CurrentPathPoint.SpeedOverride : _MoveSpeed);
+
+            if ( _CurrentPathPoint.TimingOverride > 0f ) 
             {
-                if ( _movementMode == LPS_MovementMode.PointDriven_smooth )
+                dt_segmentTravel = DateTime.Now;
+                calculatedSegmentTravelTime = Vector3.Distance(PreviousPathPoint.Position, _CurrentPathPoint.Position) / _CurrentPathPoint.TimingOverride;                    
+            }
+
+            //Debug.Log($"{nameof(currentPathPointIndex)} incremented, and now: '{currentPathPointIndex}' out of '{_CurrentPath.PathPoints.Count}' pts...");
+
+            if ( _movementMode == LPS_MovementMode.PointDriven_smooth )
+            {
+                if ( HavePathPointAfterCurrent )
                 {
-                    runningSegmentTravelTime = 0f;
+                    v_chaseGoalEnd = _CurrentPathPoint.SmoothedPosition;
+                    calculatedSegmentTravelTime = Vector3.Distance( transform.position, _CurrentPathPoint.SmoothedPosition) / _MoveSpeed;
 
-                    if ( _CurrentPathPoint.HasNext )
+                    //v_movingDirGoal = _CurrentPathPoint.Position;
+                    v_chaseGoalStart = v_chaseGoal;
+
+                    if ( currentPathPointIndex == 1 )
                     {
-                        v_chaseGoalEnd = _CurrentPathPoint.SmoothedPosition;
-                        calculatedSegmentTravelTime = Vector3.Distance(transform.position, _CurrentPathPoint.SmoothedPosition) / _MoveSpeed;
-
-                        //v_movingDirGoal = _CurrentPathPoint.Position;
-                        v_chaseGoalStart = v_chaseGoal;
-
-                        if ( currentPathPointIndex == 1 )
-                        {
-                            v_chaseGoal = _CurrentPathPoint.WideTurnPosition;
-                            v_chaseGoalStart = _CurrentPathPoint.WideTurnPosition;
-                        }
-                        //segmentEndPos = _CurrentPathPoint.Position;
-                        v_chaseGoalEnd = NextPathPoint.Position;
+                        v_chaseGoal = _CurrentPathPoint.WideTurnPosition;
+                        v_chaseGoalStart = _CurrentPathPoint.WideTurnPosition;
                     }
-                    else
-                    {
-                        calculatedSegmentTravelTime = Vector3.Distance(transform.position, _CurrentPathPoint.Position) / _MoveSpeed;
+                    //segmentEndPos = _CurrentPathPoint.Position;
+                    v_chaseGoalEnd = NextPathPoint.Position;
+                }
+                else
+                {
+                    calculatedSegmentTravelTime = Vector3.Distance( transform.position, _CurrentPathPoint.Position) / _MoveSpeed;
 
-                        v_chaseGoalEnd = _CurrentPathPoint.Position;
-                    }
+                    v_chaseGoalEnd = _CurrentPathPoint.Position;
                 }
             }
+            
+
+            dbgString += $"currentPathPointIndex: '{currentPathPointIndex}'\n" +
+                $"dist: '{Vector3.Distance(PreviousPathPoint.Position, _CurrentPathPoint.Position)}'\n" +
+                $"";
+
+            //Debug.Log( dbgString );
+        }
+
+        private void Update()
+        {
+            dbgClass = $"{nameof(flag_amTraveling)}: '{flag_amTraveling}'\n" +
+                $"{nameof(currentPathPointIndex)}: '{currentPathPointIndex}', {_CurrentPathPoint.Position}\n" +
+                $"";
+
+            if
+            (
+                !flag_amTraveling || _CurrentPath == null || CurrentPathPointIndex > _CurrentPath.PathPoints.Count ||
+                currentPathPointIndex < 0
+            )
+            {
+                return;
+            }
+
+            #region VALUE CALCULATIONS ==================================================
+            runningSegmentTravelTime += Time.deltaTime;
+            Vector3 v_entityToCrntPt = _CurrentPathPoint.Position - transform.position;
+            float travelTimePercentage = currentPathPointIndex <= 0 ? -1f : runningSegmentTravelTime / calculatedSegmentTravelTime;
+            #endregion
+
+            if ( _movementMode == LPS_MovementMode.ForwardDriven_straight )
+            {
+                Update_FwdDriven_straight();
+            }
+            else if ( _movementMode == LPS_MovementMode.ForwardDriven_smooth )
+            {
+                Update_FwdDriven_smoothed();
+            }
+            else if ( _movementMode == LPS_MovementMode.PointDriven_straight )
+            {
+                if (CurrentPathPointIndex == 0 || _CurrentPathPoint.TimingOverride <= 0f)
+                {
+                    //Debug.Log("a");
+                    transform.Translate(v_entityToCrntPt.normalized * _MoveSpeed * Time.deltaTime, Space.World);
+                }
+                else
+                {
+                    //Debug.Log("b");
+
+                    transform.position = Vector3.Lerp(
+                        PreviousPathPoint.Position, _CurrentPathPoint.Position, runningSegmentTravelTime / _CurrentPathPoint.TimingOverride
+                    );
+                }
+
+                #region INCREMENT CHECK ---------------------------------
+                if (Vector3.Distance(transform.position, _CurrentPathPoint.Position) <= Threshold_CloseEnough)
+                {
+                    IncrementPath();
+                }
+                #endregion
+            }
+            else if ( _movementMode == LPS_MovementMode.PointDriven_smooth )
+            {
+                Update_PtDriven_smoothed();
+            }
+
+            dbgClass += $"{nameof(runningSegmentTravelTime)}: '{runningSegmentTravelTime}' / {calculatedSegmentTravelTime}\n" +
+                $"{nameof(travelTimePercentage)}: '{travelTimePercentage}'\n" +
+                $"{nameof(v_entityToCrntPt)}: '{v_entityToCrntPt}'\n" +
+
+                $"";
         }
 
         private void Update_FwdDriven_straight()
@@ -220,7 +284,7 @@ namespace LogansPathSystem
 
             #region ROTATION -----------------------------------------
             Vector3 v_newFwd = Vector3.zero;
-            float dot_onTrack = Vector3.Dot(transform.forward, v_entityToCurrentPt.normalized);
+            float dot_onTrack = Vector3.Dot( transform.forward, v_entityToCurrentPt.normalized );
             float calculatedRotSpeed = TurnSpeed;
 
             if (UseProgressiveTurnSpeed)
@@ -241,7 +305,7 @@ namespace LogansPathSystem
                 0f
             );
 
-            transform.LookAt(transform.position + v_newFwd, Vector3.up);
+            transform.LookAt( transform.position + v_newFwd, Vector3.up );
             #endregion
 
             #region MOVEMENT -----------------------------------------
@@ -285,7 +349,7 @@ namespace LogansPathSystem
             #endregion
 
 #if UNITY_EDITOR
-            if (amDebugging)
+            if ( amDebugging )
             {
                 Debug.DrawLine
                 (
@@ -308,7 +372,7 @@ namespace LogansPathSystem
             Vector3 v_calculatedRotTgt = v_entityToCrntPt;
             float calculatedRotSpeed = TurnSpeed;
 
-            if ( _CurrentPathPoint.HasPrev )
+            if ( HavePathPointBeforeCurrent )
             {
                 Vector3 v_entityToWideCrntPt = _CurrentPathPoint.WideTurnPosition - transform.position;
                 float distRemaining = Mathf.Min
@@ -323,7 +387,7 @@ namespace LogansPathSystem
                     (
                         1f - (
                         distRemaining /
-                        _CurrentPathPoint.DistToPrev )
+                        _CurrentPath.GetDistToPreviousPt(currentPathPointIndex) )
                     ) * 1.25f,
                     0f, 1f
                 );
@@ -362,11 +426,11 @@ namespace LogansPathSystem
                 0f
             );
 
-            transform.LookAt(transform.position + v_newFwd, Vector3.up);
+            transform.LookAt( transform.position + v_newFwd, Vector3.up );
             #endregion
 
             #region MOVEMENT -----------------------------------------
-            float dot_onTrack = Vector3.Dot(transform.forward, v_calculatedRotTgt.normalized); //recalculate after turning...
+            float dot_onTrack = Vector3.Dot( transform.forward, v_calculatedRotTgt.normalized ); //recalculate after turning...
             if (dot_onTrack >= Threshold_RoughlyFacing)
             {
                 transform.Translate(Vector3.forward * _MoveSpeed * Time.deltaTime, Space.Self);
@@ -413,42 +477,8 @@ namespace LogansPathSystem
             #endregion
         }
 
-        private void Update_PtDriven_straight()
-        {
-            Vector3 v_entityToCurrentPt = _CurrentPathPoint.Position - transform.position;
-
-            #region ROTATION -----------------------------------------
-            //Not sure if I'm even going to have rotation for this mode...
-
-            #endregion
-
-            #region MOVEMENT -----------------------------------------
-
-            transform.Translate(v_entityToCurrentPt * _MoveSpeed * Time.deltaTime, Space.Self);
-
-            #endregion
-
-            #region INCREMENT CHECK ---------------------------------
-            float distToCrntPt = Vector3.Distance(transform.position, _CurrentPathPoint.Position);
-            dbgClass += $"{nameof(distToCrntPt)}: '{distToCrntPt}'\n" +
-                $"";
-
-            if (distToCrntPt <= Threshold_CloseEnough)
-            {
-                IncrementPath();
-            }
-            #endregion
-        }
-
-        float calculatedSegmentTravelTime;
-        float runningSegmentTravelTime;
-        Vector3 v_chaseGoalEnd;
-        Vector3 v_chaseGoal;
-        Vector3 v_chaseGoalStart;
         private void Update_PtDriven_smoothed()
         {
-            runningSegmentTravelTime += Time.deltaTime;
-
             float timePassedPercentage = runningSegmentTravelTime / calculatedSegmentTravelTime;
             dbgClass += $"{nameof(runningSegmentTravelTime)}: '{runningSegmentTravelTime}' / {calculatedSegmentTravelTime}\n" +
                 $"{nameof(timePassedPercentage)}: '{timePassedPercentage}'\n" +
@@ -511,7 +541,7 @@ namespace LogansPathSystem
                     Vector3.Dot
                     (
                         Vector3.Normalize( transform.position - _CurrentPathPoint.Position),
-                        _CurrentPathPoint.V_ToPrev.normalized
+                        V_toPrev.normalized
                     ) < 0
                 )
             )
@@ -522,14 +552,12 @@ namespace LogansPathSystem
         }
 
 #if UNITY_EDITOR
-        public void DrawMyGizmos(Vector3 vlblOffset)
+        public void DrawMyGizmos( Vector3 v_lblOfst ) //called from the LPS_Debugger
         {
-            if (!amDebugging || _CurrentPath == null || _CurrentPath.PathPoints.Count <= 0)
+            if ( !amDebugging || _CurrentPath == null || _CurrentPath.PathPoints.Count <= 0 )
             {
                 return;
             }
-
-            Color oldClr = Gizmos.color;
 
             if ( Application.isPlaying )
             {
@@ -541,8 +569,9 @@ namespace LogansPathSystem
                         Threshold_CloseEnough
                     );
 
-                    if ( !_CurrentPath.PathPoints[i].AmStartOrEndOfPath )
+                    if ( !_CurrentPath.AmStartOrEndOfPath(i) )
                     {
+                        //The following also draws the smoothed positions...
                         if ( _CurrentPath.PathPoints[i].SmoothedPosition != _CurrentPath.PathPoints[i].Position )
                         {
                             Handles.DrawWireDisc(
@@ -552,7 +581,8 @@ namespace LogansPathSystem
                             );
                         }
 
-                        if( _CurrentPath.PathPoints[i].WideTurnPosition != _CurrentPath.PathPoints[i].Position )
+                        //The following also draws the "wide turn" positions...
+                        if ( _CurrentPath.PathPoints[i].WideTurnPosition != _CurrentPath.PathPoints[i].Position )
                         {
                             Handles.DrawWireDisc(
                                _CurrentPath.PathPoints[i].WideTurnPosition,
@@ -561,26 +591,24 @@ namespace LogansPathSystem
                             );
                         }
                     }
-
                 }
 
-                if (flag_amTraveling)
+                if ( flag_amTraveling )
                 {
-                    if (currentPathPointIndex > -1 && currentPathPointIndex < _CurrentPath.PathPoints.Count)
+                    if ( currentPathPointIndex > -1 && currentPathPointIndex < _CurrentPath.PathPoints.Count)
                     {
 
                         Gizmos.color = Color.yellow;
                         Gizmos.DrawLine
                         (
                             _CurrentPath.PathPoints[currentPathPointIndex].Position,
-                            _CurrentPath.PathPoints[currentPathPointIndex].Position + (vlblOffset * 3)
+                            _CurrentPath.PathPoints[currentPathPointIndex].Position + (v_lblOfst * 3)
                         );
 
-                        Handles.Label(_CurrentPath.PathPoints[currentPathPointIndex].Position + (vlblOffset * 3), "current");
+                        Handles.Label( _CurrentPath.PathPoints[currentPathPointIndex].Position + (v_lblOfst * 3), "current");
 
                     }
                 }
-
             }
             else
             {
@@ -593,9 +621,6 @@ namespace LogansPathSystem
                 Gizmos.DrawLine(transform.position, transform.position + (transform.forward * dbgFwdLength));
                 Handles.Label(transform.position + (transform.forward * dbgFwdLength), "eFWD");
             }
-
-            Gizmos.color = oldClr;
-
         }
 #endif
     }

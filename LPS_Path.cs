@@ -13,9 +13,8 @@ namespace LogansPathSystem
     {
         public List<LPS_PathPoint> PathPoints;
 
-        [Header("DEBUG")]
-        [SerializeField] private bool dbgCross = false;
-        [SerializeField] private bool dbgWide = false;
+        //[Header("DEBUG")]
+
 
         public Vector3 Destination
         {
@@ -60,6 +59,30 @@ namespace LogansPathSystem
             }
         }
 
+        public Vector3 GetVectorToNextPt( int indx )
+        {
+            return PathPoints[indx+1].Position - PathPoints[indx].Position;
+        }
+
+        public Vector3 GetVectorToPreviousPt(int indx)
+        {
+            return PathPoints[indx - 1].Position - PathPoints[indx].Position;
+        }
+
+        public float GetDistToPreviousPt( int indx )
+        {
+            return Vector3.Distance( PathPoints[indx].Position, PathPoints[indx - 1].Position );
+        }
+
+        public float GetDistToNextPt(int indx)
+        {
+            return Vector3.Distance(PathPoints[indx].Position, PathPoints[indx + 1].Position);
+        }
+
+        public bool AmStartOrEndOfPath(int indx)
+        {
+            return indx == 0 || indx == PathPoints.Count - 1;
+        }
 
         [ContextMenu("z call GrabPointsFromChildren()")]
         public void GrabPointsFromChildren()
@@ -69,9 +92,28 @@ namespace LogansPathSystem
             Debug.Log($"Got '{PathPoints.Count}' children transforms");
         }
 
+        public LPS_PathPoint GetClosestPointToPosition( Vector3 pos )
+        {
+            int runningBestIndx = -1;
+            float runningBestDist = float.MaxValue;
+
+            for ( int i = 0; i < PathPoints.Count; i++ )
+            {
+                float dist = Vector3.Distance( pos, PathPoints[i].Position );
+                if ( dist < runningBestDist )
+                {
+                    runningBestDist = dist;
+                    runningBestIndx = i;
+                }
+            }
+
+            return PathPoints[runningBestIndx];
+        }
+
 
 #if UNITY_EDITOR
-        public void DrawMyGizmos(float radius, Vector3 lblOffset)
+        public void DrawMyGizmos(float radius, Vector3 lblOffset, bool dbgCross, 
+            bool dbgWide, bool dbgSmooth ) //called from the LPS_Debugger
         {
             if (PathPoints == null || PathPoints.Count <= 0)
             {
@@ -83,7 +125,9 @@ namespace LogansPathSystem
             Gizmos.color = color_debugPath;
             for (int i = 0; i < PathPoints.Count; i++)
             {
-                PathPoints[i].DrawMyGizmos( radius, $"p{i}", lblOffset, dbgCross, dbgWide );
+                PathPoints[i].DrawMyGizmos( 
+                    radius, $"p{i}", lblOffset, dbgCross, dbgWide, dbgSmooth 
+                );
 
                 if (i < PathPoints.Count - 1)
                 {
@@ -94,25 +138,33 @@ namespace LogansPathSystem
                     );
                 }
 
-                if ( !Application.isPlaying && i > 0 && i < PathPoints.Count - 1 )
+                if ( dbgSmooth && !Application.isPlaying && i > 0 && i < PathPoints.Count - 1 )
                 {
                     if ( i <= 0 || i >= PathPoints.Count - 1 )
                     {
                         continue;
                     }
 
-                    Vector3 pt = (
+                    Vector3 smoothPt = (
                         PathPoints[i - 1].Position +
                         PathPoints[i].Position +
                         PathPoints[i + 1].Position
                     ) / 3f;
 
-                    Gizmos.DrawCube(pt, Vector3.one * radius * 0.5f);
-                    Gizmos.DrawLine(PathPoints[i].Position, pt);
-                    Handles.Label( pt, "smoothed" );
+                    Gizmos.DrawCube(smoothPt, Vector3.one * radius * 0.5f);
+                    Gizmos.DrawLine(PathPoints[i].Position, smoothPt);
+                    Handles.Label( smoothPt, "s" );
 
                 }
             }
+
+            Gizmos.color = Color.green;
+            Gizmos.DrawLine(PathPoints[0].Position, PathPoints[0].Position + (lblOffset * 3f) );
+            Handles.Label(PathPoints[0].Position + (lblOffset * 3f), "start");
+
+            Gizmos.color = Color.red;
+            Gizmos.DrawLine(PathPoints[PathPoints.Count - 1].Position, PathPoints[PathPoints.Count-1].Position + (lblOffset * 3f));
+            Handles.Label(PathPoints[PathPoints.Count - 1].Position + (lblOffset * 3f), "end");
 
             Gizmos.color = oldColor;
         }
