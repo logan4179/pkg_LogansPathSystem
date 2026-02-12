@@ -279,7 +279,19 @@ namespace LogansPathSystem
                 if (CurrentPathPointIndex == 0 || _CurrentPathPoint.TimingOverride <= 0f)
                 {
                     //Debug.Log("a");
-                    transform.Translate(v_entityToCrntPt.normalized * _MoveSpeed * Time.deltaTime, Space.World);
+
+                    //The following checks for overshoot...
+                    Vector3 v_moveGoal = transform.position + (v_entityToCrntPt.normalized * _MoveSpeed * Time.deltaTime);
+                    if( Vector3.Distance(transform.position, _CurrentPathPoint.Position) < Vector3.Distance(transform.position, v_moveGoal) )
+                    {
+                        Debug.Log("happened");
+                        //v_moveGoal = NextPathPoint.Position;
+                        transform.position = _CurrentPathPoint.Position;
+                    }
+                    else
+                    {
+                        transform.Translate(v_entityToCrntPt.normalized * _MoveSpeed * Time.deltaTime, Space.World);
+                    }
                 }
                 else
                 {
