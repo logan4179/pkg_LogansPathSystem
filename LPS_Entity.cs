@@ -82,8 +82,15 @@ namespace LogansPathSystem
 
         [Header("EVENTS")]
         public UnityEvent Event_OnPathStarted;
-        public UnityEvent Event_OnPathPointWait;
+        [Tooltip("This event is called automatically at any pathpoint where " +
+            "the stop travel flag is set")]
+        public UnityEvent Event_OnStopTravelFlag;
         public UnityEvent Event_OnPathCompleted;
+
+        [Tooltip("You can use this as a 'utility' or 'catch-all' event that will fire on arrival to any point " +
+            "marked with the event point reached flag, but unlike the other events, there won't be any automatic " +
+            "entity logic such as travel stoppage that will happen in addition.")]
+        public UnityEvent Event_OnEventPointReachedFlag;
 
         [Header("DEBUG")]
         [SerializeField] private bool amDebugging;
@@ -152,12 +159,18 @@ namespace LogansPathSystem
         {
             string dbgString = "IncrementPath()\n";
 
-            if (_CurrentPathPoint.Flag_WaitAt) //needs to be done before the increment because this will be the moment that it reaches this point, not when it starts moving towards it
+            if (_CurrentPathPoint.Flag_StopTravel ) //needs to be done before the increment because this will be the moment that it reaches this point, not when it starts moving towards it
             {
                 flag_amTraveling = false;
-                Event_OnPathPointWait.Invoke();
+                Event_OnStopTravelFlag.Invoke();
             }
-            else if( _CurrentPathPoint.PauseDuration > 0f )
+
+            if ( _CurrentPathPoint.Flag_EventPointReached ) 
+            {
+                Event_OnEventPointReachedFlag.Invoke();
+            }
+
+            if ( _CurrentPathPoint.PauseDuration > 0f )
             {
                 flag_amTraveling = false;
                 cd_pauseAlarm = _CurrentPathPoint.PauseDuration;
@@ -284,7 +297,7 @@ namespace LogansPathSystem
                     Vector3 v_moveGoal = transform.position + (v_entityToCrntPt.normalized * _MoveSpeed * Time.deltaTime);
                     if( Vector3.Distance(transform.position, _CurrentPathPoint.Position) < Vector3.Distance(transform.position, v_moveGoal) )
                     {
-                        Debug.Log("happened");
+                        //Debug.Log("happened");
                         //v_moveGoal = NextPathPoint.Position;
                         transform.position = _CurrentPathPoint.Position;
                     }

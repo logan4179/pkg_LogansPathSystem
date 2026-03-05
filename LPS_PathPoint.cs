@@ -6,9 +6,13 @@ namespace LogansPathSystem
 {
     public class LPS_PathPoint : MonoBehaviour
     {
-        [Tooltip("A flag directing an NPS_Entity to stop at this point and wait for outside " +
-            "logic to turn movement back on.")]
-        public bool Flag_WaitAt = false;
+        [Tooltip("A flag directing an NPS_Entity to stop at this point. Travel will " +
+            "only resume if outside script calls LPS_Entity.ResumeTravel() to turn " +
+            "movement back on.")]
+        public bool Flag_StopTravel = false;
+
+        [Tooltip("This is a flag that will call the OnNotablePointReached event on an LPS_Entity")]
+        public bool Flag_EventPointReached = false;
 
         [Tooltip("Allows the NPS_Entity speed to be overriden when traveling to this point, " +
             "only if this value is above 0")]
