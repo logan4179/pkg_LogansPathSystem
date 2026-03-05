@@ -82,15 +82,20 @@ namespace LogansPathSystem
 
         [Header("EVENTS")]
         public UnityEvent Event_OnPathStarted;
+        public UnityEvent Event_OnPathCompleted;
+
         [Tooltip("This event is called automatically at any pathpoint where " +
             "the stop travel flag is set")]
         public UnityEvent Event_OnStopTravelFlag;
-        public UnityEvent Event_OnPathCompleted;
 
         [Tooltip("You can use this as a 'utility' or 'catch-all' event that will fire on arrival to any point " +
             "marked with the event point reached flag, but unlike the other events, there won't be any automatic " +
             "entity logic such as travel stoppage that will happen in addition.")]
         public UnityEvent Event_OnEventPointReachedFlag;
+
+        [Tooltip("Event called when an entity has waited the full PauseDuration of a PathPoint")]
+        public UnityEvent Event_OnEndOfPause;
+
 
         [Header("DEBUG")]
         [SerializeField] private bool amDebugging;
@@ -261,6 +266,7 @@ namespace LogansPathSystem
                     {
                         flag_amTraveling = true;
                         cd_pauseAlarm = 0f;
+                        Event_OnEndOfPause.Invoke();
                     }
                     else
                     {
